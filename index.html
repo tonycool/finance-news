@@ -277,6 +277,25 @@
       border-bottom: 2px solid var(--ink);
     }
 
+    .lead-image {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+      margin-bottom: 16px;
+      border: 1px solid var(--rule);
+    }
+
+    .lead-image-placeholder {
+      width: 100%;
+      height: 220px;
+      background: repeating-linear-gradient(
+        45deg, var(--paper-warm), var(--paper-warm) 4px, var(--paper-tinted) 4px, var(--paper-tinted) 12px
+      );
+      border: 1px solid var(--rule);
+      margin-bottom: 16px;
+    }
+
     .lead-story .col-divider {
       background: var(--rule);
     }
@@ -295,11 +314,11 @@
 
     .lead-headline {
       font-family: 'Playfair Display', serif;
-      font-size: clamp(1.4rem, 3vw, 2.1rem);
-      font-weight: 700;
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 400;
       line-height: 1.2;
       color: var(--ink);
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       text-decoration: none;
       display: block;
     }
@@ -307,10 +326,10 @@
     .lead-headline:hover { color: var(--accent); }
 
     .lead-desc {
-      font-size: 0.9rem;
-      line-height: 1.65;
+      font-size: 1rem;
+      line-height: 1.7;
       color: var(--ink-secondary);
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     .lead-meta {
@@ -353,9 +372,9 @@
 
     .sidebar-headline {
       font-family: 'Playfair Display', serif;
-      font-size: 0.88rem;
-      font-weight: 700;
-      line-height: 1.3;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 1.35;
       color: var(--ink);
     }
 
@@ -443,11 +462,74 @@
 
     .card-headline {
       font-family: 'Playfair Display', serif;
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.35;
+      font-size: 1.05rem;
+      font-weight: 400;
+      line-height: 1.4;
       color: var(--ink);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
+    }
+
+    /* ── INSIGHT BLOCK ── */
+    .insight-block {
+      margin-top: 8px;
+      border-top: 1px solid var(--rule);
+      padding-top: 7px;
+    }
+
+    .insight-summary {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--ink-secondary);
+      margin-bottom: 7px;
+    }
+
+    .num-highlight {
+      background: #fef3c7;
+      color: #92400e;
+      font-weight: 600;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    .insight-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+
+    .insight-label {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-right: 2px;
+      white-space: nowrap;
+    }
+
+    .chip {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+
+    .chip-market {
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
+    .chip-stock {
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
     }
 
     .news-card:hover .card-headline { color: var(--accent); }
@@ -755,13 +837,14 @@ async function fetchSource(source) {
   const data = await res.json();
   if (data.status !== "ok") throw new Error("Feed error");
   return (data.items || []).map(item => ({
-    source:   source.name,
-    sourceId: source.id,
-    region:   source.region,
-    title:    item.title  || "",
-    link:     item.link   || "#",
+    source:      source.name,
+    sourceId:    source.id,
+    region:      source.region,
+    title:       item.title  || "",
+    link:        item.link   || "#",
     description: stripHtml(item.description || ""),
-    pubDate:  item.pubDate ? new Date(item.pubDate) : new Date(),
+    image:       item.thumbnail || item.enclosure?.link || null,
+    pubDate:     item.pubDate ? new Date(item.pubDate) : new Date(),
   }));
 }
 
@@ -804,6 +887,199 @@ async function loadNews() {
   btn.disabled = false;
 }
 
+// ── INSIGHT BLOCK ─────────────────────────────────────────────────────────────
+
+const MARKET_KEYWORDS = [
+  "S&P 500","S&P500","Nasdaq","Dow Jones","FTSE 100","FTSE","Nikkei 225","Nikkei",
+  "Hang Seng","Shanghai Composite","Shanghai","Shenzhen","Sensex","Nifty 50","Nifty",
+  "ASX 200","ASX","DAX","CAC 40","CAC","Kospi","Straits Times Index","STI",
+  "Russell 2000","NYSE","LSE","SGX","TSX","Eurostoxx",
+  "Federal Reserve","Fed","ECB","Bank of England","BOE","BOJ","RBI","MAS","PBOC",
+  "US Treasury","Treasury","10-year yield","2-year yield",
+  "gold","silver","crude oil","Brent","WTI","copper","iron ore",
+  "Bitcoin","BTC","Ethereum","ETH","crypto",
+  "USD","EUR","GBP","JPY","CNY","SGD","AUD","HKD","KRW","INR",
+  "interest rate","inflation","CPI","GDP","recession","tariff","trade war",
+];
+
+// Sector → known tickers mapping for smart inference
+const SECTOR_STOCKS = {
+  // Big tech / AI
+  "apple":          ["AAPL"],
+  "microsoft":      ["MSFT"],
+  "google":         ["GOOGL"],
+  "alphabet":       ["GOOGL"],
+  "amazon":         ["AMZN"],
+  "meta":           ["META"],
+  "nvidia":         ["NVDA"],
+  "tesla":          ["TSLA"],
+  "openai":         ["MSFT","GOOGL"],
+  "artificial intelligence": ["NVDA","MSFT","GOOGL","AMZN"],
+  "ai chip":        ["NVDA","AMD","INTC"],
+  "semiconductor":  ["NVDA","TSM","ASML","AMD","INTC","QCOM"],
+  "chip":           ["NVDA","TSM","AMD","INTC","QCOM"],
+  // Finance / Banks
+  "jpmorgan":       ["JPM"],
+  "goldman sachs":  ["GS"],
+  "morgan stanley": ["MS"],
+  "bank of america":["BAC"],
+  "citigroup":      ["C"],
+  "hsbc":           ["HSBC"],
+  "dbs":            ["D05.SI"],
+  "ocbc":           ["O39.SI"],
+  "uob":            ["U11.SI"],
+  "banking sector": ["JPM","BAC","GS","HSBC"],
+  // Energy / Oil
+  "oil":            ["XOM","CVX","BP","SHEL"],
+  "crude":          ["XOM","CVX"],
+  "exxon":          ["XOM"],
+  "chevron":        ["CVX"],
+  "bp":             ["BP"],
+  "shell":          ["SHEL"],
+  "opec":           ["XOM","CVX","BP","SHEL"],
+  // EV / Auto
+  "electric vehicle":["TSLA","GM","F","NIO"],
+  "ev ":            ["TSLA","NIO","LI","XPEV"],
+  "toyota":         ["TM"],
+  "volkswagen":     ["VWAGY"],
+  // Retail / Consumer
+  "walmart":        ["WMT"],
+  "alibaba":        ["BABA"],
+  "jd.com":         ["JD"],
+  "pinduoduo":      ["PDD"],
+  "tencent":        ["TCEHY"],
+  "samsung":        ["005930.KS"],
+  // Pharma / Health
+  "pfizer":         ["PFE"],
+  "moderna":        ["MRNA"],
+  "johnson":        ["JNJ"],
+  "pharmaceutical": ["PFE","JNJ","MRK","ABBV"],
+  "biotech":        ["MRNA","BNTX","REGN"],
+  // Macro / Rates
+  "interest rate":  ["TLT","BND","JPM","BAC"],
+  "inflation":      ["GLD","TIP","XOM"],
+  "tariff":         ["GE","CAT","BA","NKE"],
+  "trade war":      ["BABA","JD","AAPL","NKE"],
+  "china":          ["BABA","JD","TCEHY","PDD","NIO"],
+  "japan":          ["TM","7203.T","9984.T","6758.T"],
+  "india":          ["INFY","WIT","HDB"],
+};
+
+const NUM_PATTERNS = [
+  /\$[\d,.]+\s*(?:trillion|billion|million|bn|mn|trn|tn)?/gi,
+  /[\d,.]+\s*(?:trillion|billion|million|bn|mn|trn|tn)\s*(?:dollars?|USD|EUR|GBP|JPY|CNY|SGD)?/gi,
+  /[+-]?[\d]+\.?\d*\s*(?:basis\s*points?|bps)/gi,
+  /[+-]?[\d]+\.?\d*%/g,
+];
+
+// Words that appear in headlines but aren't stock-related
+const STOPWORDS = new Set([
+  "THE","AND","FOR","ARE","BUT","NOT","YOU","ALL","CAN","HER","WAS","ONE",
+  "OUR","OUT","DAY","GET","HAS","HIM","HOW","ITS","LET","MAN","NEW","NOW",
+  "OLD","SAY","SHE","TOO","TOP","USE","WAY","WHO","WHY","WILL","WITH","THIS",
+  "THAT","FROM","HAVE","MORE","BEEN","THEY","WHEN","SAID","THAN","THEN",
+  "WHAT","WERE","ALSO","SOME","INTO","JUST","LIKE","ONLY","OVER","SUCH",
+  "YEAR","YEARS","WEEK","WEEKS","MONTH","MONTHS","AMID","AFTER","BEFORE",
+  "ABOUT","WOULD","COULD","THEIR","THERE","THESE","THOSE","WHICH","WHILE",
+  "FIRST","SECOND","THIRD","HIGHER","LOWER","MAJOR","STOCK","STOCKS","SHARE",
+  "MARKET","TRADE","RATES","RATE","SAYS","SEES","RISE","FALL","RISE","FELL",
+  "ROSE","HIGH","LOW","DATA","BANK","FUND","PLAN","DEAL","AMID","HITS","CUTS",
+  "CUTS","HIKE","DOWN","UP","AS","AT","IN","ON","OF","TO","BY","AN","IS","IT","BE",
+]);
+
+function highlightNumbers(text) {
+  let result = escHtml(text);
+  const allNums = [];
+  NUM_PATTERNS.forEach(p => {
+    let m;
+    const rg = new RegExp(p.source, p.flags);
+    while ((m = rg.exec(text)) !== null) allNums.push({ index: m.index, val: m[0] });
+  });
+  allNums.sort((a, b) => b.index - a.index);
+  const seen = new Set();
+  allNums.forEach(({ val }) => {
+    if (seen.has(val)) return;
+    seen.add(val);
+    result = result.replace(escHtml(val), `<span class="num-highlight">${escHtml(val)}</span>`);
+  });
+  return result;
+}
+
+function buildSummary(title, description) {
+  // Goal: a sentence that adds context beyond the headline
+  if (!description) return null;
+  const titleWords = new Set(title.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/));
+  // Split description into sentences
+  const sentences = description.match(/[^.!?]+[.!?]+/g) || [description];
+  // Score each sentence by how many new meaningful words it adds vs the title
+  let best = null, bestScore = -1;
+  sentences.forEach(s => {
+    const words = s.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(w => w.length > 4);
+    const newWords = words.filter(w => !titleWords.has(w)).length;
+    const hasNumber = NUM_PATTERNS.some(p => new RegExp(p.source, p.flags).test(s));
+    const score = newWords + (hasNumber ? 5 : 0);
+    if (score > bestScore) { bestScore = score; best = s.trim(); }
+  });
+  if (!best || best.length < 20) return null;
+  return best.length > 200 ? best.slice(0, 200) + "…" : best;
+}
+
+function inferStocks(title, description) {
+  const text = (title + " " + description).toLowerCase();
+  const found = new Set();
+
+  // 1. Sector/company keyword mapping
+  Object.entries(SECTOR_STOCKS).forEach(([keyword, tickers]) => {
+    if (text.includes(keyword.toLowerCase())) tickers.forEach(t => found.add(t));
+  });
+
+  // 2. Explicit tickers in parentheses e.g. (AAPL) or (NYSE: AAPL)
+  const parenRe = /\(\s*(?:[A-Z]+:\s*)?([A-Z]{1,5})\s*\)/g;
+  let m;
+  while ((m = parenRe.exec(title + " " + description)) !== null) {
+    if (!STOPWORDS.has(m[1])) found.add(m[1]);
+  }
+
+  // 3. Known ticker symbols standing alone near financial action words
+  const actionRe = /\b([A-Z]{2,5})\b(?=\s+(?:shares?|stock|rose|fell|gained|dropped|surged|plunged|slid|rallied|climbed|tumbled|soared|jumped|sank|dipped|advanced|retreated))/g;
+  while ((m = actionRe.exec(title + " " + description)) !== null) {
+    if (!STOPWORDS.has(m[1])) found.add(m[1]);
+  }
+
+  return [...found].slice(0, 5);
+}
+
+function buildInsightBlock(title, description) {
+  const rawText = (title + " " + description).replace(/\s+/g, " ");
+
+  // 1. Smart summary (adds context, not a repeat of the headline)
+  const summaryText = buildSummary(title, description || "");
+  const summaryHighlighted = summaryText ? highlightNumbers(summaryText) : null;
+
+  // 2. Markets
+  const markets = [];
+  MARKET_KEYWORDS.forEach(k => {
+    if (rawText.toLowerCase().includes(k.toLowerCase())) markets.push(k);
+  });
+  const uniqueMarkets = [...new Set(markets)].slice(0, 6);
+
+  // 3. Smarter stock inference
+  const uniqueTickers = inferStocks(title, description || "");
+
+  if (!summaryText && !uniqueMarkets.length && !uniqueTickers.length) return "";
+
+  const marketChips = uniqueMarkets.map(k =>
+    `<span class="chip chip-market">${escHtml(k)}</span>`).join("");
+  const stockChips = uniqueTickers.map(t =>
+    `<span class="chip chip-stock">${escHtml(t)}</span>`).join("");
+
+  return `<div class="insight-block">
+    ${summaryHighlighted ? `<div class="insight-summary">${summaryHighlighted}</div>` : ""}
+    ${uniqueMarkets.length ? `<div class="insight-row"><span class="insight-label">Markets</span>${marketChips}</div>` : ""}
+    ${uniqueTickers.length ? `<div class="insight-row"><span class="insight-label">Stocks</span>${stockChips}</div>` : ""}
+  </div>`;
+}
+
 // ── RENDER ────────────────────────────────────────────────────────────────────
 
 function getFilteredArticles() {
@@ -843,10 +1119,14 @@ function renderLead(items) {
           <span class="badge ${BADGE_CLASS[lead.region] || ''}">${REGION_BADGE[lead.region] || ''}</span>
           &nbsp;${escHtml(lead.source)}
         </div>
+        ${lead.image
+          ? `<img class="lead-image" src="${escHtml(lead.image)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'lead-image-placeholder'}))">`
+          : `<div class="lead-image-placeholder"></div>`}
         <a class="lead-headline" href="${escHtml(lead.link)}" target="_blank" rel="noopener">
           ${escHtml(lead.title)}
         </a>
         ${lead.description ? `<p class="lead-desc">${escHtml(lead.description.slice(0, 260))}${lead.description.length > 260 ? "…" : ""}</p>` : ""}
+        ${buildInsightBlock(lead.title, lead.description)}
         <div class="lead-meta">
           <span>${formatDate(lead.pubDate)}</span>
         </div>
@@ -860,6 +1140,7 @@ function renderLead(items) {
               &nbsp;${escHtml(a.source)}
             </div>
             <div class="sidebar-headline">${escHtml(a.title)}</div>
+            ${buildInsightBlock(a.title, a.description)}
             <div class="sidebar-date">${formatDate(a.pubDate)}</div>
           </a>`).join("")}
       </div>
@@ -886,7 +1167,7 @@ function renderGrid(items) {
         <span class="card-date">${formatDate(a.pubDate)}</span>
       </div>
       <div class="card-headline">${escHtml(a.title)}</div>
-      ${a.description ? `<div class="card-desc">${escHtml(a.description)}</div>` : ""}
+      ${buildInsightBlock(a.title, a.description)}
     </a>`).join("");
 }
 
