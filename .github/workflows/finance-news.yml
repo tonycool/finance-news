@@ -1,0 +1,70 @@
+name: Finance Daily — Hourly Email
+
+on:
+  # Runs at the top of every hour, 24/7
+  schedule:
+    - cron: "0 * * * *"
+
+  # Lets you trigger a send manually from the GitHub Actions tab (great for testing)
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: "Test mode (saves HTML, skips email send)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+jobs:
+  send-digest:
+    name: Fetch feeds & send email
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Checkout code ────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Node.js ───────────────────────────────────────────────────
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: scheduler/package-lock.json
+
+      # ── 3. Install dependencies ─────────────────────────────────────────────
+      - name: Install dependencies
+        working-directory: scheduler
+        run: npm ci
+
+      # ── 4. Send (or test) ───────────────────────────────────────────────────
+      - name: Send Finance Daily email
+        working-directory: scheduler
+        env:
+          SMTP_HOST:   ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:   ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER:   ${{ secrets.SMTP_USER }}
+          SMTP_PASS:   ${{ secrets.SMTP_PASS }}
+          FROM_NAME:   ${{ secrets.FROM_NAME }}
+          FROM_EMAIL:  ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL:    ${{ secrets.TO_EMAIL }}
+          MAX_ARTICLES: "30"
+        run: |
+          if [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
+            echo "Running in TEST MODE — no email will be sent"
+            node send.js --test
+          else
+            node send.js
+          fi
+
+      # ── 5. Upload test output as artifact (test mode only) ──────────────────
+      - name: Upload test HTML preview
+        if: ${{ github.event.inputs.test_mode == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-daily-preview
+          path: scheduler/test-output.html
+          retention-days: 1

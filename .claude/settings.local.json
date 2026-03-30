@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /Users/tony/ClaudeCodeTesting1/scheduler/install.sh)",
+      "Bash(npm install:*)",
+      "Bash(npm audit:*)",
+      "Bash(node -e \"const n = require\\(''nodemailer''\\); console.log\\(''nodemailer ok, version:'', require\\(''./node_modules/nodemailer/package.json''\\).version\\)\")",
+      "Bash(node send.js --test)"
+    ]
+  }
+}

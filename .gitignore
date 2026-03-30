@@ -1,0 +1,14 @@
+# Credentials — NEVER commit these
+scheduler/.env
+scheduler/test-output.html
+
+# Dependencies
+node_modules/
+scheduler/node_modules/
+
+# Logs
+*.log
+scheduler/*.log
+
+# macOS
+.DS_Store
