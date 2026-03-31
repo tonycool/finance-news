@@ -38,7 +38,7 @@
     .masthead {
       background: var(--paper);
       border-bottom: 3px double var(--ink);
-      padding: 0 32px;
+      padding: 0 max(32px, calc(50vw - 608px));
     }
 
     .masthead-top {
@@ -190,7 +190,7 @@
     /* ── REGION TABS ── */
     .region-nav {
       background: var(--ink);
-      padding: 0 32px;
+      padding: 0 max(32px, calc(50vw - 608px));
       display: flex;
       align-items: center;
       gap: 0;
@@ -218,7 +218,7 @@
     .source-strip {
       background: var(--paper-tinted);
       border-bottom: 2px solid var(--ink);
-      padding: 6px 32px;
+      padding: 6px max(32px, calc(50vw - 608px));
       display: flex;
       gap: 6px;
       overflow-x: auto;
@@ -1016,7 +1016,7 @@ async function translateText(text) {
   if (!text || !text.trim()) return text;
   if (translationCache[text]) return translationCache[text];
   try {
-    const res  = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`);
+    const res  = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN&de=genaihk123@gmail.com`);
     const data = await res.json();
     const out  = data.responseData?.translatedText || text;
     translationCache[text] = out;
@@ -1027,17 +1027,18 @@ async function translateText(text) {
 
 async function translateArticles(articles) {
   const statusEl = document.getElementById("status-bar");
+  const LIMIT = 30;   // only translate top 30 articles
   const BATCH = 8;
+  const targets = articles.slice(0, LIMIT).filter(a => !a.titleZh);
   let done = 0;
 
-  for (let i = 0; i < articles.length; i += BATCH) {
-    const batch = articles.slice(i, i + BATCH);
+  for (let i = 0; i < targets.length; i += BATCH) {
+    const batch = targets.slice(i, i + BATCH);
     await Promise.allSettled(batch.map(async a => {
-      if (!a.titleZh)   a.titleZh   = await translateText(a.title);
-      if (!a.summaryZh && a.summary) a.summaryZh = await translateText(a.summary);
+      a.titleZh = await translateText(a.title); // titles only — saves ~5× quota
     }));
     done += batch.length;
-    statusEl.textContent = ui("translating", Math.min(done, articles.length), articles.length);
+    statusEl.textContent = ui("translating", Math.min(done, targets.length), targets.length);
     renderArticles();
   }
   statusEl.textContent = ui("loaded", articles.length, SOURCES.length);
