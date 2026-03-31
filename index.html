@@ -532,6 +532,30 @@
       border: 1px solid #bbf7d0;
     }
 
+    /* ── LANG TOGGLE ── */
+    .lang-toggle {
+      display: flex;
+      border: 1px solid var(--ink);
+      overflow: hidden;
+    }
+
+    .lang-toggle button {
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--ink-muted);
+      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.04em;
+    }
+
+    .lang-toggle button:first-child { border-right: 1px solid var(--ink); }
+    .lang-toggle button.active { background: var(--ink); color: var(--paper); }
+    .lang-toggle button:not(.active):hover { background: var(--paper-warm); }
+
     .news-card:hover .card-headline { color: var(--accent); }
 
     .card-desc {
@@ -698,8 +722,12 @@
       <label class="auto-refresh-label">
         <input type="checkbox" id="auto-refresh" /> Auto (60s)
       </label>
-      <button class="btn btn-outline" id="refresh-btn" onclick="loadNews()">&#8635; Refresh</button>
-      <button class="btn btn-accent" onclick="openShareModal()">&#9993; Share</button>
+      <div class="lang-toggle">
+        <button id="lang-zh" onclick="switchLang('zh')">中文</button>
+        <button id="lang-en" onclick="switchLang('en')">EN</button>
+      </div>
+      <button class="btn btn-outline" id="refresh-btn" onclick="loadNews()">&#8635; <span id="lbl-refresh">刷新</span></button>
+      <button class="btn btn-accent" onclick="openShareModal()">&#9993; <span id="lbl-share">分享</span></button>
     </div>
   </div>
 </div>
@@ -716,7 +744,7 @@
 <!-- MAIN CONTENT -->
 <div class="container">
   <div id="lead-section"></div>
-  <div class="section-heading"><span>Latest Stories</span></div>
+  <div class="section-heading"><span id="section-label">最新报道</span></div>
   <div class="news-grid" id="news-grid"></div>
 </div>
 
@@ -738,19 +766,59 @@
 </div>
 
 <script>
+// ── LANGUAGE ─────────────────────────────────────────────────────────────────
+
+let currentLang = localStorage.getItem("fd_lang") || "zh";
+
+const UI = {
+  en: {
+    allRegions: "All Regions", americas: "Americas", europe: "Europe", asia: "Asia-Pacific",
+    allSources: "All Sources", latestStories: "Latest Stories",
+    markets: "Markets", stocks: "Stocks",
+    refresh: "Refresh", share: "Share", auto: "Auto (60s)",
+    searchPlaceholder: "Search headlines, topics, sources…",
+    noMatch: "No articles match your search.",
+    updatedAt: t => `Updated ${t}`,
+    articleCount: n => `${n} articles`,
+    loading: n => `Fetching latest news from ${n} sources…`,
+    loaded: (n, s) => `${n} articles loaded from ${s} sources across 3 regions.`,
+    couldNotLoad: s => `Could not load: ${s}. Showing available sources.`,
+    translating: (d, t) => `Translated ${d}/${t} articles…`,
+  },
+  zh: {
+    allRegions: "所有地区", americas: "美洲", europe: "欧洲", asia: "亚太地区",
+    allSources: "所有来源", latestStories: "最新报道",
+    markets: "涉及市场", stocks: "相关股票",
+    refresh: "刷新", share: "分享", auto: "自动 (60秒)",
+    searchPlaceholder: "搜索标题、主题、来源…",
+    noMatch: "没有符合条件的文章。",
+    updatedAt: t => `更新于 ${t}`,
+    articleCount: n => `${n} 篇文章`,
+    loading: n => `正在从 ${n} 个来源获取最新资讯…`,
+    loaded: (n, s) => `已从 ${s} 个来源加载 ${n} 篇文章，覆盖三大地区。`,
+    couldNotLoad: s => `无法加载：${s}。显示可用来源。`,
+    translating: (d, t) => `已翻译 ${d}/${t} 篇…`,
+  },
+};
+
+function ui(key, ...args) {
+  const val = UI[currentLang][key];
+  return typeof val === "function" ? val(...args) : val;
+}
+
 // ── DATA ────────────────────────────────────────────────────────────────────
 
 const REGIONS = [
-  { id: "all",      label: "All Regions" },
-  { id: "americas", label: "Americas" },
-  { id: "europe",   label: "Europe" },
-  { id: "asia",     label: "Asia-Pacific" },
+  { id: "all",      labelKey: "allRegions" },
+  { id: "americas", labelKey: "americas"   },
+  { id: "europe",   labelKey: "europe"     },
+  { id: "asia",     labelKey: "asia"       },
 ];
 
 const SOURCES = [
   // Americas
   { id: "yahoo",       name: "Yahoo Finance",     region: "americas", url: "https://finance.yahoo.com/news/rssindex" },
-  { id: "reuters",     name: "Reuters Business",  region: "americas", url: "https://feeds.reuters.com/reuters/businessNews" },
+  { id: "bloomberg",   name: "Bloomberg Markets", region: "americas", url: "https://feeds.bloomberg.com/markets/news.rss" },
   { id: "cnbc",        name: "CNBC",              region: "americas", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html" },
   { id: "marketwatch", name: "MarketWatch",       region: "americas", url: "https://feeds.marketwatch.com/marketwatch/topstories/" },
   { id: "wsj",         name: "WSJ Markets",       region: "americas", url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml" },
@@ -761,16 +829,21 @@ const SOURCES = [
   // Asia-Pacific
   { id: "nikkei",      name: "Nikkei Asia",       region: "asia",     url: "https://asia.nikkei.com/rss/feed/nar" },
   { id: "scmp",        name: "S. China Morning Post", region: "asia", url: "https://www.scmp.com/rss/91/feed" },
-  { id: "et",          name: "Economic Times",    region: "asia",     url: "https://economictimes.indiatimes.com/markets/rss.cms" },
+  { id: "moneycontrol",name: "Moneycontrol",      region: "asia",     url: "https://www.moneycontrol.com/rss/latestnews.xml" },
   { id: "cna",         name: "Channel NewsAsia",  region: "asia",     url: "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511" },
-  { id: "straits",     name: "Straits Times",     region: "asia",     url: "https://www.straitstimes.com/business/rss.xml" },
-  { id: "caixin",      name: "Caixin Global",     region: "asia",     url: "https://www.caixinglobal.com/rss/en_top_news.xml" },
+  { id: "businesstimes",name: "Business Times",   region: "asia",     url: "https://www.businesstimes.com.sg/rss/all" },
+  { id: "investing",   name: "Investing.com Asia",region: "asia",     url: "https://www.investing.com/rss/news_285.rss" },
 ];
 
-const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
+const RSS2JSON    = "https://api.rss2json.com/v1/api.json?rss_url=";
 const REGION_BADGE = { americas: "AMERICAS", europe: "EUROPE", asia: "ASIA-PAC" };
 const BADGE_CLASS  = { americas: "badge-americas", europe: "badge-europe", asia: "badge-asia" };
 const REGION_COLOR = { americas: "#154320", europe: "#4a1a6e", asia: "#1a5276" };
+
+// Translation cache persisted in localStorage
+const translationCache = (() => {
+  try { return JSON.parse(localStorage.getItem("fd_tc") || "{}"); } catch { return {}; }
+})();
 
 let allArticles  = [];
 let activeRegion = "all";
@@ -779,25 +852,33 @@ let autoTimer    = null;
 
 // ── INIT UI ─────────────────────────────────────────────────────────────────
 
-document.getElementById("today-date").textContent =
-  new Date().toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+function updateDateDisplay() {
+  document.getElementById("today-date").textContent = currentLang === "zh"
+    ? new Date().toLocaleDateString("zh-CN", { year:"numeric", month:"long", day:"numeric", weekday:"long" })
+    : new Date().toLocaleDateString("en-US", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+}
+updateDateDisplay();
 
-// Region tabs
-const regionTabsEl = document.getElementById("region-tabs");
-REGIONS.forEach(r => {
-  const t = document.createElement("div");
-  t.className = "region-tab" + (r.id === "all" ? " active" : "");
-  t.textContent = r.label;
-  t.addEventListener("click", () => {
-    activeRegion = r.id;
-    activeSource = "all";
-    document.querySelectorAll(".region-tab").forEach(x => x.classList.remove("active"));
-    t.classList.add("active");
-    rebuildSourcePills();
-    renderArticles();
+// Region tabs — rebuilt on language switch to update labels
+function rebuildRegionTabs() {
+  const el = document.getElementById("region-tabs");
+  el.innerHTML = "";
+  REGIONS.forEach(r => {
+    const tab = document.createElement("div");
+    tab.className = "region-tab" + (r.id === activeRegion ? " active" : "");
+    tab.textContent = ui(r.labelKey);
+    tab.addEventListener("click", () => {
+      activeRegion = r.id;
+      activeSource = "all";
+      document.querySelectorAll(".region-tab").forEach(x => x.classList.remove("active"));
+      tab.classList.add("active");
+      rebuildSourcePills();
+      renderArticles();
+    });
+    el.appendChild(tab);
   });
-  regionTabsEl.appendChild(t);
-});
+}
+rebuildRegionTabs();
 
 // Source pills
 function rebuildSourcePills() {
@@ -806,7 +887,7 @@ function rebuildSourcePills() {
 
   const all = document.createElement("div");
   all.className = "source-pill" + (activeSource === "all" ? " active" : "");
-  all.textContent = "All Sources";
+  all.textContent = ui("allSources");
   all.addEventListener("click", () => setSource("all", all));
   el.appendChild(all);
 
@@ -828,6 +909,40 @@ function setSource(id, el) {
 }
 
 rebuildSourcePills();
+
+// ── LANGUAGE SWITCH ──────────────────────────────────────────────────────────
+
+function switchLang(lang) {
+  currentLang = lang;
+  localStorage.setItem("fd_lang", lang);
+
+  // Toggle button state
+  document.getElementById("lang-zh").classList.toggle("active", lang === "zh");
+  document.getElementById("lang-en").classList.toggle("active", lang === "en");
+
+  // Update static UI labels
+  updateDateDisplay();
+  document.getElementById("section-label").textContent    = ui("latestStories");
+  document.getElementById("lbl-refresh").textContent      = ui("refresh");
+  document.getElementById("lbl-share").textContent        = ui("share");
+  document.getElementById("search-input").placeholder     = ui("searchPlaceholder");
+  document.getElementById("auto-refresh").nextSibling.textContent = " " + ui("auto");
+
+  rebuildRegionTabs();
+  rebuildSourcePills();
+
+  // Trigger translation if switching to Chinese and not yet translated
+  if (lang === "zh" && allArticles.length && !allArticles[0].titleZh) {
+    translateArticles(allArticles).then(() => renderArticles());
+  } else {
+    renderArticles();
+  }
+}
+
+// Apply initial lang state to toggle buttons
+document.getElementById("lang-zh").classList.toggle("active", currentLang === "zh");
+document.getElementById("lang-en").classList.toggle("active", currentLang === "en");
+document.getElementById("search-input").placeholder = ui("searchPlaceholder");
 
 // ── FETCH ────────────────────────────────────────────────────────────────────
 
@@ -859,7 +974,7 @@ async function loadNews() {
   const statusEl = document.getElementById("status-bar");
   btn.disabled = true;
   statusEl.className = "";
-  statusEl.innerHTML = '<span class="spinner"></span>&nbsp;Fetching latest news from ' + SOURCES.length + ' sources…';
+  statusEl.innerHTML = `<span class="spinner"></span>&nbsp;${ui("loading", SOURCES.length)}`;
 
   const results = await Promise.allSettled(SOURCES.map(fetchSource));
   const fresh = [], errors = [];
@@ -873,18 +988,59 @@ async function loadNews() {
   allArticles = fresh;
 
   const now = new Date().toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit" });
-  document.getElementById("last-updated").textContent = "Updated " + now;
-  document.getElementById("article-count-top").textContent = fresh.length + " articles";
+  document.getElementById("last-updated").textContent = ui("updatedAt", now);
+  document.getElementById("article-count-top").textContent = ui("articleCount", fresh.length);
 
   if (errors.length) {
     statusEl.className = "error";
-    statusEl.textContent = "Could not load: " + errors.join(", ") + ". Showing available sources.";
+    statusEl.textContent = ui("couldNotLoad", errors.join(", "));
   } else {
-    statusEl.textContent = fresh.length + " articles loaded from " + SOURCES.length + " sources across 3 regions.";
+    statusEl.textContent = ui("loaded", fresh.length, SOURCES.length);
   }
+
+  // Pre-compute English summaries for all articles
+  fresh.forEach(a => { a.summary = buildSummary(a.title, a.description); });
 
   renderArticles();
   btn.disabled = false;
+
+  // Translate in background if Chinese mode
+  if (currentLang === "zh") {
+    translateArticles(fresh).then(() => renderArticles());
+  }
+}
+
+// ── TRANSLATION ───────────────────────────────────────────────────────────────
+
+async function translateText(text) {
+  if (!text || !text.trim()) return text;
+  if (translationCache[text]) return translationCache[text];
+  try {
+    const res  = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`);
+    const data = await res.json();
+    const out  = data.responseData?.translatedText || text;
+    translationCache[text] = out;
+    try { localStorage.setItem("fd_tc", JSON.stringify(translationCache)); } catch {}
+    return out;
+  } catch { return text; }
+}
+
+async function translateArticles(articles) {
+  const statusEl = document.getElementById("status-bar");
+  const BATCH = 8;
+  let done = 0;
+
+  for (let i = 0; i < articles.length; i += BATCH) {
+    const batch = articles.slice(i, i + BATCH);
+    await Promise.allSettled(batch.map(async a => {
+      if (!a.titleZh)   a.titleZh   = await translateText(a.title);
+      if (!a.summaryZh && a.summary) a.summaryZh = await translateText(a.summary);
+    }));
+    done += batch.length;
+    statusEl.textContent = ui("translating", Math.min(done, articles.length), articles.length);
+    renderArticles();
+  }
+  statusEl.textContent = ui("loaded", articles.length, SOURCES.length);
 }
 
 // ── INSIGHT BLOCK ─────────────────────────────────────────────────────────────
@@ -1049,22 +1205,19 @@ function inferStocks(title, description) {
   return [...found].slice(0, 5);
 }
 
-function buildInsightBlock(title, description) {
-  const rawText = (title + " " + description).replace(/\s+/g, " ");
+function buildInsightBlock(a) {
+  const title       = (currentLang === "zh" && a.titleZh)   ? a.titleZh   : a.title;
+  const summaryText = (currentLang === "zh" && a.summaryZh) ? a.summaryZh : (a.summary || "");
+  const rawText     = (a.title + " " + (a.description || "")).replace(/\s+/g, " ");
 
-  // 1. Smart summary (adds context, not a repeat of the headline)
-  const summaryText = buildSummary(title, description || "");
   const summaryHighlighted = summaryText ? highlightNumbers(summaryText) : null;
 
-  // 2. Markets
   const markets = [];
   MARKET_KEYWORDS.forEach(k => {
     if (rawText.toLowerCase().includes(k.toLowerCase())) markets.push(k);
   });
   const uniqueMarkets = [...new Set(markets)].slice(0, 6);
-
-  // 3. Smarter stock inference
-  const uniqueTickers = inferStocks(title, description || "");
+  const uniqueTickers = inferStocks(a.title, a.description || "");
 
   if (!summaryText && !uniqueMarkets.length && !uniqueTickers.length) return "";
 
@@ -1075,8 +1228,8 @@ function buildInsightBlock(title, description) {
 
   return `<div class="insight-block">
     ${summaryHighlighted ? `<div class="insight-summary">${summaryHighlighted}</div>` : ""}
-    ${uniqueMarkets.length ? `<div class="insight-row"><span class="insight-label">Markets</span>${marketChips}</div>` : ""}
-    ${uniqueTickers.length ? `<div class="insight-row"><span class="insight-label">Stocks</span>${stockChips}</div>` : ""}
+    ${uniqueMarkets.length ? `<div class="insight-row"><span class="insight-label">${ui("markets")}</span>${marketChips}</div>` : ""}
+    ${uniqueTickers.length ? `<div class="insight-row"><span class="insight-label">${ui("stocks")}</span>${stockChips}</div>` : ""}
   </div>`;
 }
 
@@ -1092,6 +1245,7 @@ function getFilteredArticles() {
   if (query) {
     items = items.filter(a =>
       a.title.toLowerCase().includes(query) ||
+      (a.titleZh || "").toLowerCase().includes(query) ||
       a.description.toLowerCase().includes(query) ||
       a.source.toLowerCase().includes(query)
     );
@@ -1123,10 +1277,9 @@ function renderLead(items) {
           ? `<img class="lead-image" src="${escHtml(lead.image)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'lead-image-placeholder'}))">`
           : `<div class="lead-image-placeholder"></div>`}
         <a class="lead-headline" href="${escHtml(lead.link)}" target="_blank" rel="noopener">
-          ${escHtml(lead.title)}
+          ${escHtml(currentLang === "zh" && lead.titleZh ? lead.titleZh : lead.title)}
         </a>
-        ${lead.description ? `<p class="lead-desc">${escHtml(lead.description.slice(0, 260))}${lead.description.length > 260 ? "…" : ""}</p>` : ""}
-        ${buildInsightBlock(lead.title, lead.description)}
+        ${buildInsightBlock(lead)}
         <div class="lead-meta">
           <span>${formatDate(lead.pubDate)}</span>
         </div>
@@ -1139,8 +1292,8 @@ function renderLead(items) {
               <span class="badge ${BADGE_CLASS[a.region] || ''}">${REGION_BADGE[a.region] || ''}</span>
               &nbsp;${escHtml(a.source)}
             </div>
-            <div class="sidebar-headline">${escHtml(a.title)}</div>
-            ${buildInsightBlock(a.title, a.description)}
+            <div class="sidebar-headline">${escHtml(currentLang === "zh" && a.titleZh ? a.titleZh : a.title)}</div>
+            ${buildInsightBlock(a)}
             <div class="sidebar-date">${formatDate(a.pubDate)}</div>
           </a>`).join("")}
       </div>
@@ -1154,7 +1307,7 @@ function renderGrid(items) {
       <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
         <path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2z"/>
       </svg>
-      <p>No articles match your search.</p>
+      <p>${ui("noMatch")}</p>
     </div>`;
     return;
   }
@@ -1166,8 +1319,8 @@ function renderGrid(items) {
         <span class="source-name">${escHtml(a.source)}</span>
         <span class="card-date">${formatDate(a.pubDate)}</span>
       </div>
-      <div class="card-headline">${escHtml(a.title)}</div>
-      ${buildInsightBlock(a.title, a.description)}
+      <div class="card-headline">${escHtml(currentLang === "zh" && a.titleZh ? a.titleZh : a.title)}</div>
+      ${buildInsightBlock(a)}
     </a>`).join("");
 }
 
