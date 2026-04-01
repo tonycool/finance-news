@@ -1,9 +1,9 @@
-name: Finance Daily — Hourly Email
+name: Finance Daily — Daily 7am Taiwan Time
 
 on:
-  # Runs at the top of every hour, 24/7
+  # Runs once daily at 23:00 UTC = 07:00 Taiwan Time (UTC+8)
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 23 * * *"
 
   # Lets you trigger a send manually from the GitHub Actions tab (great for testing)
   workflow_dispatch:
